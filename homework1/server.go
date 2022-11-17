@@ -23,11 +23,25 @@ var _ Server = &HTTPServer{}
 
 type HTTPServer struct {
 	router
+	mdls []Middleware
 }
 
-func NewHTTPServer() *HTTPServer {
-	return &HTTPServer{
+type HTTPServerOption func(server *HTTPServer)
+
+func NewHTTPServer(opts ...HTTPServerOption) *HTTPServer {
+	s := &HTTPServer{
 		router: newRouter(),
+	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+func ServerWithMiddleware(mdls ...Middleware) HTTPServerOption {
+	return func(server *HTTPServer) {
+		server.mdls = mdls
 	}
 }
 
@@ -37,7 +51,13 @@ func (s *HTTPServer) ServeHTTP(writer http.ResponseWriter, request *http.Request
 		Req:  request,
 		Resp: writer,
 	}
-	s.serve(ctx)
+
+	root := s.serve
+	for i := len(s.mdls) - 1; i >= 0; i-- {
+		root = s.mdls[i](root)
+	}
+
+	root(ctx)
 }
 
 // Start 启动服务器
