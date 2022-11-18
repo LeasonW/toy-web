@@ -15,7 +15,7 @@ func Test_AccessLog_Middleware(t *testing.T) {
 
 	server := web.NewHTTPServer(web.ServerWithMiddleware(mdl))
 
-	server.Get("/a/b/c", func(ctx *web.Context) {
+	server.Get("/a/*", func(ctx *web.Context) {
 		ctx.RespJSON(http.StatusOK, "hello, it's me")
 	})
 

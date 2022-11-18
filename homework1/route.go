@@ -35,8 +35,9 @@ func (r *router) addRoute(method string, path string, handler HandleFunc) {
 	root, ok := r.trees[method]
 	if !ok {
 		root = &node{
-			path: "/",
-			typ:  nodeTypeStatic,
+			path:  "/",
+			route: "/",
+			typ:   nodeTypeStatic,
 		}
 		r.trees[method] = root
 	}
@@ -61,6 +62,7 @@ func (r *router) addRoute(method string, path string, handler HandleFunc) {
 		panic(fmt.Sprintf("web: 路由冲突[%s]", path))
 	}
 
+	root.route = path
 	root.handler = handler
 }
 
@@ -132,7 +134,8 @@ const (
 type node struct {
 	typ nodeType
 
-	path string
+	route string
+	path  string
 	// children 子节点
 	// 子节点的 path => node
 	children map[string]*node

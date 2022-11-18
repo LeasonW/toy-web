@@ -81,5 +81,6 @@ func (s *HTTPServer) serve(ctx *Context) {
 		return
 	}
 	ctx.PathParams = mi.pathParams
+	ctx.Route = mi.n.route
 	mi.n.handler(ctx)
 }

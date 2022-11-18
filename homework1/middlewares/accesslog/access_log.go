@@ -23,10 +23,15 @@ func (m *MiddlewareBuilder) Build() web.Middleware {
 	return func(next web.HandleFunc) web.HandleFunc {
 		return func(c *web.Context) {
 			defer func() {
+				if m.logFn == nil {
+					return
+				}
+
 				l := accessLog{
 					Host:       c.Req.Host,
 					HTTPMethod: c.Req.Method,
 					Path:       c.Req.URL.Path,
+					Route:      c.Route,
 				}
 				data, _ := json.Marshal(l)
 				m.logFn(string(data))

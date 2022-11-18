@@ -11,6 +11,7 @@ type Context struct {
 	Req        *http.Request
 	Resp       http.ResponseWriter
 	PathParams map[string]string
+	Route      string
 
 	cacheQueryValues url.Values
 }
