@@ -13,6 +13,8 @@ type Context struct {
 	PathParams map[string]string
 	Route      string
 
+	RespStatusCode int
+
 	cacheQueryValues url.Values
 }
 
