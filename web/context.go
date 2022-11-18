@@ -13,6 +13,7 @@ type Context struct {
 	PathParams map[string]string
 	Route      string
 
+	RespData       []byte
 	RespStatusCode int
 
 	cacheQueryValues url.Values
@@ -59,9 +60,9 @@ func (c *Context) RespJSON(code int, val interface{}) error {
 		return err
 	}
 
-	c.Resp.WriteHeader(code)
-	_, err = c.Resp.Write(bs)
-	return err
+	c.RespStatusCode = code
+	c.RespData = bs
+	return nil
 }
 
 func (c *Context) SetCookie(cookie *http.Cookie) {

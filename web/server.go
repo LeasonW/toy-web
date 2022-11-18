@@ -57,6 +57,16 @@ func (s *HTTPServer) ServeHTTP(writer http.ResponseWriter, request *http.Request
 		root = s.mdls[i](root)
 	}
 
+	var m Middleware = func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			// 就设置好了 RespData 和 RespStatusCode
+			next(ctx)
+			s.flashResp(ctx)
+		}
+	}
+
+	root = m(root)
+
 	root(ctx)
 }
 
@@ -76,11 +86,16 @@ func (s *HTTPServer) Get(path string, handler HandleFunc) {
 func (s *HTTPServer) serve(ctx *Context) {
 	mi, ok := s.findRoute(ctx.Req.Method, ctx.Req.URL.Path)
 	if !ok || mi.n == nil || mi.n.handler == nil {
-		ctx.Resp.WriteHeader(404)
-		ctx.Resp.Write([]byte("Not Found"))
+		ctx.RespStatusCode = http.StatusNotFound
+		ctx.RespData = []byte("Not Found")
 		return
 	}
 	ctx.PathParams = mi.pathParams
 	ctx.Route = mi.n.route
 	mi.n.handler(ctx)
+}
+
+func (s *HTTPServer) flashResp(ctx *Context) {
+	ctx.Resp.WriteHeader(ctx.RespStatusCode)
+	ctx.Resp.Write(ctx.RespData)
 }
