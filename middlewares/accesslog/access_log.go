@@ -3,7 +3,7 @@ package accesslog
 import (
 	"encoding/json"
 	"fmt"
-	web "leason-toy-web/homework1"
+	web "leason-toy-web/web"
 )
 
 type MiddlewareBuilder struct {

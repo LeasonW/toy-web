@@ -2,7 +2,7 @@ package accesslog
 
 import (
 	"fmt"
-	web "leason-toy-web/homework1"
+	web "leason-toy-web/web"
 	"net/http"
 	"testing"
 )
