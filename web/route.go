@@ -29,7 +29,7 @@ func newRouter() router {
 // - 不能在同一个位置注册不同的参数路由，例如 /user/:id 和 /user/:name 冲突
 // - 不能在同一个位置同时注册通配符路由和参数路由，例如 /user/:id 和 /user/* 冲突
 // - 同名路径参数，在路由匹配的时候，值会被覆盖。例如 /user/:id/abc/:id，那么 /user/123/abc/456 最终 id = 456
-func (r *router) addRoute(method string, path string, handler HandleFunc) {
+func (r *router) addRoute(method string, path string, handler HandleFunc, mdls ...Middleware) {
 	r.validatePath(path)
 
 	root, ok := r.trees[method]
@@ -58,12 +58,17 @@ func (r *router) addRoute(method string, path string, handler HandleFunc) {
 		root = root.childOrCreate(seg)
 	}
 
-	if root.handler != nil {
-		panic(fmt.Sprintf("web: 路由冲突[%s]", path))
+	if handler != nil {
+		if root.handler != nil {
+			panic(fmt.Sprintf("web: 路由冲突[%s]", path))
+		}
+		root.handler = handler
 	}
 
 	root.route = path
-	root.handler = handler
+	for _, mdl := range mdls {
+		root.mdls = append(root.mdls, mdl)
+	}
 }
 
 // findRoute 查找对应的节点
@@ -76,7 +81,8 @@ func (r *router) findRoute(method string, path string) (*matchInfo, bool) {
 
 	if path == "/" {
 		return &matchInfo{
-			n: root,
+			n:    root,
+			mdls: root.mdls,
 		}, true
 	}
 
@@ -90,6 +96,7 @@ func (r *router) findRoute(method string, path string) (*matchInfo, bool) {
 				return &matchInfo{
 					n:          anyNode,
 					pathParams: params,
+					mdls:       r.findMdls(r.trees[method], segs[1:]),
 				}, true
 			}
 			return nil, false
@@ -108,6 +115,7 @@ func (r *router) findRoute(method string, path string) (*matchInfo, bool) {
 	return &matchInfo{
 		n:          root,
 		pathParams: params,
+		mdls:       r.findMdls(r.trees[method], segs[1:]),
 	}, true
 }
 
@@ -152,6 +160,9 @@ type node struct {
 	// 正则表达式
 	regChild *node
 	regExpr  *regexp.Regexp
+
+	// middleware
+	mdls []Middleware
 }
 
 // child 返回子节点
@@ -253,9 +264,49 @@ func (n *node) childOrCreate(path string) *node {
 	return child
 }
 
+// findMdls 层次遍历所有满足前缀匹配的节点
+// 按照 通配符匹配 -> 路径匹配 -> 正则匹配 -> 静态匹配的优先级，返回节点上的 middlewares
+func (r *router) findMdls(root *node, segs []string) []Middleware {
+	mdls := []Middleware{}
+	mdls = append(mdls, root.mdls...)
+	queue := []*node{root}
+
+	for _, seg := range segs {
+		if len(queue) == 0 {
+			break
+		}
+
+		l := len(queue)
+		for i := 0; i < l; i++ {
+			n := queue[i]
+			if n.starChild != nil {
+				mdls = append(mdls, n.starChild.mdls...)
+				queue = append(queue, n.starChild)
+			}
+			if n.paramChild != nil {
+				mdls = append(mdls, n.paramChild.mdls...)
+				queue = append(queue, n.paramChild)
+			}
+			if n.regChild != nil && matchRegExpr(n.regChild.path, seg) {
+				mdls = append(mdls, n.regChild.mdls...)
+				queue = append(queue, n.regChild)
+			}
+			if n.children != nil {
+				if child, ok := n.children[seg]; ok {
+					mdls = append(mdls, child.mdls...)
+					queue = append(queue, child)
+				}
+			}
+		}
+		queue = queue[l:]
+	}
+	return mdls
+}
+
 type matchInfo struct {
 	n          *node
 	pathParams map[string]string
+	mdls       []Middleware
 }
 
 func (m *matchInfo) addValue(key string, value string) {

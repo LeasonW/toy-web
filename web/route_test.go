@@ -620,3 +620,257 @@ func Test_isRegExpr(t *testing.T) {
 	assert.False(t, isReg)
 	assert.True(t, name == "")
 }
+
+// CASE 1
+// Use("GET", "/a/b", ms)
+// 当输入路径 /a/b 的时候，会调度对应的 ms
+// 当输入路径 /a/b/c 的时候，会调度执行 ms
+func Test_FindRoute_Case1(t *testing.T) {
+	mockHandler := HandleFunc(func(ctx *Context) {})
+	ms := Middleware(func(next HandleFunc) HandleFunc { return func(ctx *Context) {} })
+
+	testRoutes := []struct {
+		method  string
+		path    string
+		mdls    []Middleware
+		handler func(ctx *Context)
+	}{
+		{
+			method:  http.MethodGet,
+			path:    "/a/b",
+			mdls:    []Middleware{ms},
+			handler: mockHandler,
+		},
+		{
+			method:  http.MethodGet,
+			path:    "/a/b/c",
+			handler: mockHandler,
+		},
+	}
+
+	r := newRouter()
+	for _, tr := range testRoutes {
+		r.addRoute(tr.method, tr.path, tr.handler, tr.mdls...)
+	}
+
+	// 执行 /a/b
+	match, ok := r.findRoute(http.MethodGet, "/a/b")
+	assert.True(t, ok)
+	assert.NotNil(t, match)
+	assert.NotNil(t, match.n)
+	assert.True(t, len(match.mdls) == 1)
+	assert.Equal(t, reflect.ValueOf(match.mdls[0]), reflect.ValueOf(ms))
+	assert.Equal(t, reflect.ValueOf(match.n.handler), reflect.ValueOf(mockHandler))
+	// 执行 /a/b/c
+	match, ok = r.findRoute(http.MethodGet, "/a/b")
+	assert.True(t, ok)
+	assert.NotNil(t, match)
+	assert.NotNil(t, match.n)
+	assert.True(t, len(match.mdls) == 1)
+	assert.Equal(t, reflect.ValueOf(match.mdls[0]), reflect.ValueOf(ms))
+	assert.Equal(t, reflect.ValueOf(match.n.handler), reflect.ValueOf(mockHandler))
+}
+
+// CASE 2
+// Use(GET, "/a", ms1)
+// Use(GET, "/a/b", ms2)
+// 当输入路径 /a/c 的时候，会调度 ms1
+// 当输入路径为 /a/b/c 的时候，会调度 ms1 和 ms2
+func Test_FindRoute_Case2(t *testing.T) {
+	mockHandler := HandleFunc(func(ctx *Context) {})
+	ms1 := Middleware(func(next HandleFunc) HandleFunc { return func(ctx *Context) {} })
+	ms2 := Middleware(func(next HandleFunc) HandleFunc { return func(ctx *Context) {} })
+
+	testRoutes := []struct {
+		method  string
+		path    string
+		mdls    []Middleware
+		handler func(ctx *Context)
+	}{
+		{
+			method:  http.MethodGet,
+			path:    "/a/c",
+			handler: mockHandler,
+		},
+		{
+			method:  http.MethodGet,
+			path:    "/a/b/c",
+			handler: mockHandler,
+		},
+		{
+			method: http.MethodGet,
+			path:   "/a",
+			mdls:   []Middleware{ms1},
+		},
+		{
+			method: http.MethodGet,
+			path:   "/a/b",
+			mdls:   []Middleware{ms2},
+		},
+	}
+
+	r := newRouter()
+	for _, tr := range testRoutes {
+		r.addRoute(tr.method, tr.path, tr.handler, tr.mdls...)
+	}
+
+	// 执行 /a/c，预期调度 ms1
+	match, ok := r.findRoute(http.MethodGet, "/a/c")
+	assert.True(t, ok)
+	assert.NotNil(t, match)
+	assert.NotNil(t, match.n)
+	assert.Equal(t, reflect.ValueOf(match.n.handler), reflect.ValueOf(mockHandler))
+	assert.True(t, len(match.mdls) == 1)
+	assert.Equal(t, reflect.ValueOf(match.mdls[0]), reflect.ValueOf(ms1))
+
+	// 执行 /a/b/c，预期调度 ms1 -> ms2
+	match, ok = r.findRoute(http.MethodGet, "/a/b/c")
+	assert.True(t, ok)
+	assert.NotNil(t, match)
+	assert.NotNil(t, match.n)
+	assert.Equal(t, reflect.ValueOf(match.n.handler), reflect.ValueOf(mockHandler))
+	assert.True(t, len(match.mdls) == 2)
+	assert.Equal(t, reflect.ValueOf(match.mdls[0]), reflect.ValueOf(ms1))
+	assert.Equal(t, reflect.ValueOf(match.mdls[1]), reflect.ValueOf(ms2))
+}
+
+// CASE 3
+// Use(GET, "/a/*/c", ms1)
+// Use(GET, "/a/b/c", ms2)
+// 当输入路径 /a/d/c 的时候，会调度 ms1
+// 当输入路径为 /a/b/c 的时候，会调度 ms1 和 ms2
+// 当输入路径为 /a/b/d 的时候，不会调度
+func Test_FindRoute_Case3(t *testing.T) {
+	mockHandler := HandleFunc(func(ctx *Context) {})
+	ms1 := Middleware(func(next HandleFunc) HandleFunc { return func(ctx *Context) {} })
+	ms2 := Middleware(func(next HandleFunc) HandleFunc { return func(ctx *Context) {} })
+
+	testRoutes := []struct {
+		method  string
+		path    string
+		mdls    []Middleware
+		handler func(ctx *Context)
+	}{
+		{
+			method:  http.MethodGet,
+			path:    "/a/d/c",
+			handler: mockHandler,
+		},
+		{
+			method:  http.MethodGet,
+			path:    "/a/b/c",
+			handler: mockHandler,
+		},
+		{
+			method:  http.MethodGet,
+			path:    "/a/b/d",
+			handler: mockHandler,
+		},
+		{
+			method: http.MethodGet,
+			path:   "/a/*/c",
+			mdls:   []Middleware{ms1},
+		},
+		{
+			method: http.MethodGet,
+			path:   "/a/b/c",
+			mdls:   []Middleware{ms2},
+		},
+	}
+
+	r := newRouter()
+	for _, tr := range testRoutes {
+		r.addRoute(tr.method, tr.path, tr.handler, tr.mdls...)
+	}
+
+	// 执行 /a/d/c，预期调度 ms1
+	match, ok := r.findRoute(http.MethodGet, "/a/d/c")
+	assert.True(t, ok)
+	assert.NotNil(t, match)
+	assert.NotNil(t, match.n)
+	assert.Equal(t, reflect.ValueOf(match.n.handler), reflect.ValueOf(mockHandler))
+	assert.True(t, len(match.mdls) == 1)
+	assert.Equal(t, reflect.ValueOf(match.mdls[0]), reflect.ValueOf(ms1))
+
+	// 执行 /a/b/c，预期调度 ms1 -> ms2
+	match, ok = r.findRoute(http.MethodGet, "/a/b/c")
+	assert.True(t, ok)
+	assert.NotNil(t, match)
+	assert.NotNil(t, match.n)
+	assert.Equal(t, reflect.ValueOf(match.n.handler), reflect.ValueOf(mockHandler))
+	assert.True(t, len(match.mdls) == 2)
+	assert.Equal(t, reflect.ValueOf(match.mdls[0]), reflect.ValueOf(ms1))
+	assert.Equal(t, reflect.ValueOf(match.mdls[1]), reflect.ValueOf(ms2))
+
+	// 执行 /a/b/d，预期不会调度
+	match, ok = r.findRoute(http.MethodGet, "/a/b/d")
+	fmt.Printf("match = %#v\n", match)
+	assert.True(t, ok)
+	assert.NotNil(t, match)
+	assert.NotNil(t, match.n)
+	assert.Equal(t, reflect.ValueOf(match.n.handler), reflect.ValueOf(mockHandler))
+	assert.True(t, len(match.mdls) == 0)
+}
+
+// CASE 4
+// Use(GET, "/a/:id", ms1)
+// Use(GET, "/a/123/c", ms2)
+// 当输入路径为 /a/123 的时候，会调度 ms1
+// 当输入路径为 /a/123/c 的时候，会调度 ms1 和 ms2
+func Test_FindRoute_Case4(t *testing.T) {
+	mockHandler := HandleFunc(func(ctx *Context) {})
+	ms1 := Middleware(func(next HandleFunc) HandleFunc { return func(ctx *Context) {} })
+	ms2 := Middleware(func(next HandleFunc) HandleFunc { return func(ctx *Context) {} })
+
+	testRoutes := []struct {
+		method  string
+		path    string
+		mdls    []Middleware
+		handler func(ctx *Context)
+	}{
+		{
+			method:  http.MethodGet,
+			path:    "/a/123",
+			handler: mockHandler,
+		},
+		{
+			method:  http.MethodGet,
+			path:    "/a/123/c",
+			handler: mockHandler,
+		},
+		{
+			method: http.MethodGet,
+			path:   "/a/:id",
+			mdls:   []Middleware{ms1},
+		},
+		{
+			method: http.MethodGet,
+			path:   "/a/123/c",
+			mdls:   []Middleware{ms2},
+		},
+	}
+
+	r := newRouter()
+	for _, tr := range testRoutes {
+		r.addRoute(tr.method, tr.path, tr.handler, tr.mdls...)
+	}
+
+	// 执行 /a/123, 预期调度 ms1
+	match, ok := r.findRoute(http.MethodGet, "/a/123")
+	assert.True(t, ok)
+	assert.NotNil(t, match)
+	assert.NotNil(t, match.n)
+	assert.Equal(t, reflect.ValueOf(match.n.handler), reflect.ValueOf(mockHandler))
+	assert.True(t, len(match.mdls) == 1)
+	assert.Equal(t, reflect.ValueOf(match.mdls[0]), reflect.ValueOf(ms1))
+
+	// 执行 /a/123/c，预期调度 ms1 -> ms2
+	match, ok = r.findRoute(http.MethodGet, "/a/123/c")
+	assert.True(t, ok)
+	assert.NotNil(t, match)
+	assert.NotNil(t, match.n)
+	assert.Equal(t, reflect.ValueOf(match.n.handler), reflect.ValueOf(mockHandler))
+	assert.True(t, len(match.mdls) == 2)
+	assert.Equal(t, reflect.ValueOf(match.mdls[0]), reflect.ValueOf(ms1))
+	assert.Equal(t, reflect.ValueOf(match.mdls[1]), reflect.ValueOf(ms2))
+}

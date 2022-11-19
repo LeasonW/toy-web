@@ -13,7 +13,7 @@ type Server interface {
 
 	// addRoute 注册一个路由
 	// method 是 HTTP 方法
-	addRoute(method string, path string, handler HandleFunc)
+	addRoute(method string, path string, handler HandleFunc, mdls ...Middleware)
 	// 我们并不采取这种设计方案
 	// addRoute(method string, path string, handlers... HandleFunc)
 }
@@ -98,4 +98,8 @@ func (s *HTTPServer) serve(ctx *Context) {
 func (s *HTTPServer) flashResp(ctx *Context) {
 	ctx.Resp.WriteHeader(ctx.RespStatusCode)
 	ctx.Resp.Write(ctx.RespData)
+}
+
+func (s *HTTPServer) Use(method string, path string, ms ...Middleware) {
+	s.addRoute(method, path, nil, ms...)
 }
