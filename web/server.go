@@ -95,7 +95,7 @@ func (s *HTTPServer) serve(ctx *Context) {
 
 	root := mi.n.handler
 	for i := len(mi.mdls) - 1; i >= 0; i-- {
-		root = s.mdls[i](root)
+		root = mi.mdls[i](root)
 	}
 
 	root(ctx)

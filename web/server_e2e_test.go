@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 )
@@ -34,6 +35,34 @@ func TestServer(t *testing.T) {
 			cookies[name] = value
 		}
 		ctx.RespJSON(http.StatusOK, cookies)
+	})
+
+	s.Start(":8081")
+}
+
+func Test_Route_Middleware(t *testing.T) {
+	s := NewHTTPServer()
+	s.Get("/", func(ctx *Context) {
+		ctx.Resp.Write([]byte("hello, world"))
+		fmt.Println("/ handler")
+	})
+	s.Get("/user", func(ctx *Context) {
+		ctx.Resp.Write([]byte("hello, user"))
+		fmt.Println("/user handler")
+	})
+	s.Use(http.MethodGet, "/", func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			fmt.Println("/ middleware before")
+			next(ctx)
+			fmt.Println("/ middleware after")
+		}
+	})
+	s.Use(http.MethodGet, "/user", func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			fmt.Println("/user middleware before")
+			next(ctx)
+			fmt.Println("/user middleware after")
+		}
 	})
 
 	s.Start(":8081")
