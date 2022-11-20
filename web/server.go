@@ -92,7 +92,13 @@ func (s *HTTPServer) serve(ctx *Context) {
 	}
 	ctx.PathParams = mi.pathParams
 	ctx.Route = mi.n.route
-	mi.n.handler(ctx)
+
+	root := mi.n.handler
+	for i := len(mi.mdls) - 1; i >= 0; i-- {
+		root = s.mdls[i](root)
+	}
+
+	root(ctx)
 }
 
 func (s *HTTPServer) flashResp(ctx *Context) {

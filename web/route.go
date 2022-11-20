@@ -43,10 +43,13 @@ func (r *router) addRoute(method string, path string, handler HandleFunc, mdls .
 	}
 
 	if path == "/" {
-		if root.handler != nil {
-			panic("web: 路由冲突[/]")
+		if handler != nil {
+			if root.handler != nil {
+				panic("web: 路由冲突[/]")
+			}
+			root.handler = handler
 		}
-		root.handler = handler
+		root.mdls = append(root.mdls, mdls...)
 		return
 	}
 
