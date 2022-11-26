@@ -17,6 +17,8 @@ type Context struct {
 	RespStatusCode int
 
 	cacheQueryValues url.Values
+
+	tplEngine TemplateEngine
 }
 
 func (c *Context) BindJSON(val interface{}) error {
@@ -67,4 +69,14 @@ func (c *Context) RespJSON(code int, val interface{}) error {
 
 func (c *Context) SetCookie(cookie *http.Cookie) {
 	http.SetCookie(c.Resp, cookie)
+}
+
+func (c *Context) Render(tpl string, data any) error {
+	var err error
+	c.RespData, err = c.tplEngine.Render(c.Req.Context(), tpl, data)
+	c.RespStatusCode = 200
+	if err != nil {
+		c.RespStatusCode = 500
+	}
+	return err
 }
