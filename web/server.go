@@ -1,6 +1,10 @@
 package web
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+	"strconv"
+)
 
 type HandleFunc func(ctx *Context)
 
@@ -110,8 +114,14 @@ func (s *HTTPServer) serve(ctx *Context) {
 }
 
 func (s *HTTPServer) flashResp(ctx *Context) {
-	ctx.Resp.WriteHeader(ctx.RespStatusCode)
-	ctx.Resp.Write(ctx.RespData)
+	if ctx.RespStatusCode > 0 {
+		ctx.Resp.WriteHeader(ctx.RespStatusCode)
+	}
+	ctx.Resp.Header().Set("Content-Length", strconv.Itoa(len(ctx.RespData)))
+	_, err := ctx.Resp.Write(ctx.RespData)
+	if err != nil {
+		fmt.Printf("写响应失败")
+	}
 }
 
 func (s *HTTPServer) Use(method string, path string, ms ...Middleware) {
