@@ -1,7 +1,10 @@
 package web
 
 import (
+	"fmt"
+	lru "github.com/hashicorp/golang-lru"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -108,4 +111,98 @@ func (f *FileDownloader) Handle() HandleFunc {
 		header.Set("Pragma", "public")
 		http.ServeFile(ctx.Resp, ctx.Req, path)
 	}
+}
+
+type fileCacheItem struct {
+	fileName    string
+	fileSize    int
+	contentType string
+	data        []byte
+}
+
+type StaticResourceHandler struct {
+	dir                     string
+	extensionContentTypeMap map[string]string
+	cache                   *lru.Cache
+	maxFileSize             int
+}
+
+func NewStaticResourceHandler(dir string) (*StaticResourceHandler, error) {
+	cache, err := lru.New(1000)
+	if err != nil {
+		return nil, err
+	}
+
+	return &StaticResourceHandler{
+		dir:         dir,
+		maxFileSize: 10 * 1024 * 1024,
+		cache:       cache,
+		extensionContentTypeMap: map[string]string{
+			// 这里根据自己的需要不断添加
+			"jpeg": "image/jpeg",
+			"jpe":  "image/jpeg",
+			"jpg":  "image/jpeg",
+			"png":  "image/png",
+			"pdf":  "image/pdf",
+		},
+	}, nil
+}
+
+func (h *StaticResourceHandler) Handle(ctx *Context) {
+	req, _ := ctx.PathValue("filename")
+	if item, ok := h.readFileFromData(req); ok {
+		log.Printf("从缓存中读取数据...")
+		h.writeItemAsResponse(item, ctx.Resp)
+		return
+	}
+	path := filepath.Join(h.dir, req)
+	f, err := os.Open(path)
+	if err != nil {
+		ctx.Resp.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	ext := filepath.Ext(path)[1:]
+	t, ok := h.extensionContentTypeMap[ext]
+	if !ok {
+		ctx.Resp.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		ctx.Resp.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	item := &fileCacheItem{
+		fileSize:    len(data),
+		data:        data,
+		contentType: t,
+		fileName:    req,
+	}
+
+	h.cacheFile(item)
+	h.writeItemAsResponse(item, ctx.Resp)
+}
+
+func (h *StaticResourceHandler) cacheFile(item *fileCacheItem) {
+	if h.cache != nil && item.fileSize < h.maxFileSize {
+		h.cache.Add(item.fileName, item)
+	}
+}
+
+func (h *StaticResourceHandler) writeItemAsResponse(item *fileCacheItem, writer http.ResponseWriter) {
+	writer.WriteHeader(http.StatusOK)
+	writer.Header().Set("Content-Type", item.contentType)
+	writer.Header().Set("Content-Length", fmt.Sprintf("%d", item.fileSize))
+	_, _ = writer.Write(item.data)
+
+}
+
+func (h *StaticResourceHandler) readFileFromData(fileName string) (*fileCacheItem, bool) {
+	if h.cache != nil {
+		if item, ok := h.cache.Get(fileName); ok {
+			return item.(*fileCacheItem), true
+		}
+	}
+	return nil, false
 }

@@ -46,3 +46,16 @@ func TestFileDownloader(t *testing.T) {
 	// 在浏览器里面输入 localhost:8081/download?file=test.txt
 	s.Start(":8081")
 }
+
+func TestStaticResourceHandler(t *testing.T) {
+	s, err := NewStaticResourceHandler("testdata/static")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := NewHTTPServer()
+
+	server.Get("/static/:filename", s.Handle)
+
+	server.Start(":8081")
+}
