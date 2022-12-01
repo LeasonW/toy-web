@@ -9,7 +9,8 @@ type Propagator struct {
 
 func NewPropagator() *Propagator {
 	return &Propagator{
-		cookieName: "sessid",
+		cookieName:   "sessid",
+		cookieOption: func(c *http.Cookie) {},
 	}
 }
 

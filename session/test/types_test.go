@@ -1,13 +1,21 @@
-package session
+package test
 
 import (
+	"leason-toy-web/session"
+	"leason-toy-web/session/cookie"
+	"leason-toy-web/session/memory"
 	"leason-toy-web/web"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestSession(t *testing.T) {
-	var m Manager
+	var m *session.Manager = &session.Manager{
+		Store:      memory.NewStore(5 * time.Minute),
+		Propagator: cookie.NewPropagator(),
+		CtxSessKey: "_sesskey",
+	}
 	server := web.NewHTTPServer(web.ServerWithMiddleware(func(next web.HandleFunc) web.HandleFunc {
 		return func(ctx *web.Context) {
 			if ctx.Req.URL.Path == "/login" {
@@ -32,7 +40,14 @@ func TestSession(t *testing.T) {
 
 	server.Get("/user", func(ctx *web.Context) {
 		sess, _ := m.GetSession(ctx)
-		sess.Get(ctx.Req.Context(), "nickname")
+		val, err := sess.Get(ctx.Req.Context(), "nickname")
+		if err != nil {
+			ctx.RespStatusCode = http.StatusInternalServerError
+			ctx.RespData = []byte("查询失败")
+			return
+		}
+		ctx.RespStatusCode = http.StatusOK
+		ctx.RespData = []byte(val.(string))
 	})
 
 	// 登陆
