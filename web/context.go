@@ -19,6 +19,8 @@ type Context struct {
 	cacheQueryValues url.Values
 
 	tplEngine TemplateEngine
+
+	UserValues map[string]interface{}
 }
 
 func (c *Context) BindJSON(val interface{}) error {
